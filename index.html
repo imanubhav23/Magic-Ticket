@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zone Ride Ticket Display</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#000000">
+    <link rel="apple-touch-icon" href="icon-192x192.png">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+        }
+        #initialForm {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #initialForm form {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+        }
+        .text-box {
+            width: 100px;
+            height: 100px;
+            border: 1px solid black;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        #qrCode {
+            width: 100px;
+            height: 100px;
+        }
+        .container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        #interstate {
+            font-weight: bold;
+            color: black;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        #dateBox {
+            width: 200px;
+            height: 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2em;
+            text-align: center;
+            word-break: break-word;
+            border-radius: 10px;
+            background: linear-gradient(to bottom, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0.1) 100%);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #timeInfo {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        #expirationTimer {
+            text-align: center;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        #blinkingBar {
+            height: 20px;
+            width: 100%;
+            display: flex;
+        }
+        .bar-segment {
+            height: 100%;
+            width: 33.33%;
+        }
+        .color-option {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            margin: 5px;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        .color-option.selected {
+            border-color: black;
+        }
+        @media (max-width: 600px) {
+            #dateBox {
+                width: 150px;
+                height: 60px;
+                font-size: 1em;
+            }
+            .text-box, #qrCode {
+                width: 80px;
+                height: 80px;
+            }
+            #interstate {
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="initialForm">
+        <form onsubmit="submitForm(event)">
+            <div id="colorOptions">
+                <div class="color-option" style="background-color: #FF0000;" onclick="selectColor('#FF0000', this)"></div>
+                <div class="color-option" style="background-color: #00FF00;" onclick="selectColor('#00FF00', this)"></div>
+                <div class="color-option" style="background-color: #0000FF;" onclick="selectColor('#0000FF', this)"></div>
+                <div class="color-option" style="background-color: #FFFF00;" onclick="selectColor('#FFFF00', this)"></div>
+                <div class="color-option" style="background-color: #FF00FF;" onclick="selectColor('#FF00FF', this)"></div>
+                <div class="color-option" style="background-color: #00FFFF;" onclick="selectColor('#00FFFF', this)"></div>
+                <div class="color-option" style="background-color: #FFA500;" onclick="selectColor('#FFA500', this)"></div>
+            </div>
+            <input type="hidden" id="colorPicker" required>
+            <input type="date" id="datePicker" required>
+            <input type="number" id="zonePicker" min="1" max="20" required placeholder="Zone Number (1-20)">
+            <button type="submit">Submit</button>
+        </form>
+    </div>
+
+    <div id="mainContent" style="display: none;">
+        <div class="header">
+            <div class="text-box">
+                <div>One Way</div>
+                <div>1 Adult</div>
+            </div>
+            <div id="qrCode"></div>
+        </div>
+
+        <div class="container">
+            <div id="interstate">INTERSTATE</div>
+            <div id="dateBox"></div>
+        </div>
+
+        <div id="timeInfo"></div>
+        <div id="expirationTimer"></div>
+        <div id="blinkingBar">
+            <div class="bar-segment" style="background-color: #000080;"></div>
+            <div class="bar-segment" style="background-color: #006400;"></div>
+            <div class="bar-segment" style="background-color: #ADD8E6;"></div>
+        </div>
+    </div>
+
+    <script>
+        let expirationDate;
+        let selectedColor;
+
+        function selectColor(color, element) {
+            selectedColor = color;
+            document.getElementById('colorPicker').value = color;
+            document.querySelectorAll('.color-option').forEach(el => el.classList.remove('selected'));
+            element.classList.add('selected');
+        }
+
+        function submitForm(event) {
+            event.preventDefault();
+            const color = document.getElementById('colorPicker').value;
+            const date = document.getElementById('datePicker').value;
+            const zone = document.getElementById('zonePicker').value;
+            if (!color || !date || !zone) {
+                alert('Please select a color, date, and zone number.');
+                return;
+            }
+            updateBox(color, date, zone);
+            document.getElementById('initialForm').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+            generateQRCode();
+            startCountdown();
+            updateTimeInfo();
+        }
+
+        function updateBox(color, date, zone) {
+            const dateBox = document.getElementById('dateBox');
+            dateBox.style.backgroundColor = color;
+            dateBox.innerHTML = `
+                <div style="font-size: 2em; font-weight: bold;">${zone}</div>
+                <div>ZONE RIDE</div>
+                <div style="font-size: 0.8em; margin-top: 5px;">**Not Valid for HBLR**</div>
+            `;
+        }
+
+        function blinkBar() {
+            const segments = document.querySelectorAll('.bar-segment');
+            segments.forEach(segment => {
+                segment.style.visibility = (segment.style.visibility === 'hidden') ? 'visible' : 'hidden';
+            });
+        }
+
+        function generateQRCode() {
+            new QRCode(document.getElementById("qrCode"), {
+                text: "https://example.com",
+                width: 100,
+                height: 100
+            });
+        }
+
+        function startCountdown() {
+            expirationDate = new Date(new Date().getTime() + 59 * 60 * 1000);
+            updateCountdown();
+            setInterval(updateCountdown, 1000);
+        }
+
+        function updateCountdown() {
+            const now = new Date().getTime();
+            const distance = expirationDate - now;
+
+            const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+            document.getElementById("expirationTimer").innerHTML = `Expires in ${days.toString().padStart(2, '0')}:${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        function updateTimeInfo() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+            const dateString = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' });
+            document.getElementById("timeInfo").innerHTML = `${timeString}<br>${dateString}`;
+            setTimeout(updateTimeInfo, 1000);
+        }
+
+        setInterval(blinkBar, 500);
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/service-worker.js').then(function(registration) {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                }, function(err) {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
